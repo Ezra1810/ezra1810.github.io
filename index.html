@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Meme Caption Battle</title>
+    <!-- Tailwind via CDN for quick prototyping -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* small helper for ring effect on vote */
+      .ring-4 { box-shadow: 0 0 0 4px rgba(34,197,94,0.25); }
+    </style>
+  </head>
+  <body class="antialiased bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 min-h-screen">
+    <div id="root"></div>
+
+    <!-- React and Babel for in-browser JSX transform (not for production) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const MEME_IMAGES = [
+      { id: 1, url: "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600&h=600&fit=crop", alt: "Surprised cat" },
+      { id: 2, url: "https://images.unsplash.com/photo-1517849845537-4d257902454a?w=600&h=600&fit=crop", alt: "Dog with glasses" },
+      { id: 3, url: "https://images.unsplash.com/photo-1415369629372-26f2fe60c467?w=600&h=600&fit=crop", alt: "Surprised animal" },
+      { id: 4, url: "https://images.unsplash.com/photo-1425082661705-1834bfd09dca?w=600&h=600&fit=crop", alt: "Confused dog" },
+      { id: 5, url: "https://images.unsplash.com/photo-1583337130417-3346a1be7dee?w=600&h=600&fit=crop", alt: "Funny dog face" }
+    ];
+
+    function IconUsers() { return (<span className="w-6 h-6 inline-block">👥</span>); }
+    function IconPlay() { return (<span className="w-5 h-5 inline-block">▶️</span>); }
+    function IconClock() { return (<span className="w-5 h-5 inline-block">⏱️</span>); }
+    function IconSend() { return (<span className="w-4 h-4 inline-block">📤</span>); }
+    function IconTrophy() { return (<span className="w-6 h-6 inline-block">🏆</span>); }
+    function IconStar() { return (<span className="w-6 h-6 inline-block">⭐</span>); }
+
+    function MemeCaptionGame() {
+      const [screen, setScreen] = useState('home');
+      const [roomCode, setRoomCode] = useState('');
+      const [playerName, setPlayerName] = useState('');
+      const [isHost, setIsHost] = useState(false);
+      const [players, setPlayers] = useState([]);
+      const [currentRound, setCurrentRound] = useState(0);
+      const [currentMeme, setCurrentMeme] = useState(null);
+      const [caption, setCaption] = useState('');
+      const [submissions, setSubmissions] = useState({});
+      const [scores, setScores] = useState({});
+      const [timeLeft, setTimeLeft] = useState(60);
+      const [votedFor, setVotedFor] = useState(null);
+      const [votes, setVotes] = useState({});
+
+      useEffect(() => {
+        if (screen === 'caption' && timeLeft > 0) {
+          const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+          return () => clearTimeout(timer);
+        } else if (screen === 'caption' && timeLeft === 0) {
+          handleCaptionTimeUp();
+        }
+      }, [timeLeft, screen]);
+
+      const generateRoomCode = () => Math.random().toString(36).substring(2,8).toUpperCase();
+
+      const handleCreateRoom = () => {
+        if (!playerName.trim()) { alert('Please enter your name'); return; }
+        const code = generateRoomCode();
+        setRoomCode(code);
+        setIsHost(true);
+        setPlayers([{ name: playerName, id: Date.now() }]);
+        setScores({ [playerName]: 0 });
+        setScreen('lobby');
+      };
+
+      const handleJoinRoom = () => {
+        if (!playerName.trim() || !roomCode.trim()) { alert('Please enter your name and room code'); return; }
+        if (players.length >= 10) { alert('Room is full!'); return; }
+        const newPlayer = { name: playerName, id: Date.now() };
+        setPlayers(prev => [...prev, newPlayer]);
+        setScores(prev => ({ ...prev, [playerName]: 0 }));
+        setScreen('lobby');
+      };
+
+      const handleStartGame = () => {
+        const randomMeme = MEME_IMAGES[Math.floor(Math.random() * MEME_IMAGES.length)];
+        setCurrentMeme(randomMeme);
+        setScreen('caption');
+        setCurrentRound(1);
+        setTimeLeft(60);
+        setSubmissions({});
+      };
+
+      const handleSubmitCaption = () => {
+        if (!caption.trim()) { alert('Please enter a caption!'); return; }
+        setSubmissions(prev => ({ ...prev, [playerName]: caption }));
+        setCaption('');
+        setScreen('waiting');
+      };
+
+      const handleCaptionTimeUp = () => {
+        setScreen('voting');
+        setVotes({});
+        setVotedFor(null);
+      };
+
+      const handleVote = (pName) => {
+        if (votedFor) return;
+        setVotedFor(pName);
+        setVotes(prev => ({ ...prev, [pName]: (prev[pName] || 0) + 1 }));
+      };
+
+      const handleShowResults = () => {
+        const newScores = { ...scores };
+        Object.entries(votes).forEach(([player, voteCount]) => {
+          newScores[player] = (newScores[player] || 0) + (voteCount * 100);
+        });
+        setScores(newScores);
+        setScreen('results');
+      };
+
+      const handleNextRound = () => {
+        if (currentRound < 5) {
+          const randomMeme = MEME_IMAGES[Math.floor(Math.random() * MEME_IMAGES.length)];
+          setCurrentMeme(randomMeme);
+          setCurrentRound(currentRound + 1);
+          setTimeLeft(60);
+          setSubmissions({});
+          setVotes({});
+          setVotedFor(null);
+          setScreen('caption');
+        } else {
+          setScreen('final');
+        }
+      };
+
+      const handlePlayAgain = () => {
+        setCurrentRound(0);
+        setScores(Object.keys(scores).reduce((acc, key) => ({ ...acc, [key]: 0 }), {}));
+        setSubmissions({});
+        setVotes({});
+        setVotedFor(null);
+        setScreen('lobby');
+      };
+
+      const sortedScores = Object.entries(scores).sort((a,b) => b[1]-a[1]);
+      const submittedPlayers = Object.keys(submissions);
+
+      if (screen === 'home') return (
+        <div className="flex items-center justify-center p-4 min-h-screen">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full">
+            <div className="text-center mb-8">
+              <div className="text-6xl mb-4">😂</div>
+              <h1 className="text-4xl font-bold text-gray-800 mb-2">Meme Caption Battle</h1>
+              <p className="text-gray-600">Create the funniest caption to win!</p>
+            </div>
+
+            <div className="space-y-4">
+              <input type="text" placeholder="Enter your name" value={playerName} onChange={(e)=>setPlayerName(e.target.value)} className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500" maxLength={20} />
+
+              <button onClick={handleCreateRoom} className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4 rounded-xl font-semibold hover:shadow-lg transform hover:scale-105 transition">Create Room</button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-white text-gray-500">OR</span>
+                </div>
+              </div>
+
+              <input type="text" placeholder="Enter room code" value={roomCode} onChange={(e)=>setRoomCode(e.target.value.toUpperCase())} className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500" maxLength={6} />
+
+              <button onClick={handleJoinRoom} className="w-full bg-white border-2 border-purple-600 text-purple-600 py-4 rounded-xl font-semibold hover:bg-purple-50 transition">Join Room</button>
+            </div>
+          </div>
+        </div>
+      );
+
+      if (screen === 'lobby') return (
+        <div className="flex items-center justify-center p-4 min-h-screen">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-2xl w-full">
+            <div className="text-center mb-8">
+              <div className="inline-block bg-gray-100 rounded-2xl px-6 py-3 mb-4">
+                <p className="text-sm text-gray-600">Room Code</p>
+                <p className="text-3xl font-bold text-purple-600">{roomCode}</p>
+              </div>
+              <p className="text-gray-600">Share this code with your friends!</p>
+            </div>
+
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><IconUsers/> Players ({players.length}/10)</h2>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {players.map((player, idx) => (
+                  <div key={player.id} className="bg-gradient-to-r from-purple-100 to-pink-100 rounded-xl p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold">{idx+1}</div>
+                    <span className="font-semibold text-gray-800">{player.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-blue-50 rounded-xl p-4 mb-6">
+              <h3 className="font-bold text-gray-800 mb-2">How to Play:</h3>
+              <ul className="text-sm text-gray-700 space-y-1">
+                <li>• A meme image will be shown each round</li>
+                <li>• Write the funniest caption you can think of</li>
+                <li>• Vote for your favorite caption (can't vote for your own!)</li>
+                <li>• Get 100 points for each vote you receive</li>
+                <li>• Play 5 rounds and the highest score wins!</li>
+              </ul>
+            </div>
+
+            {isHost ? (
+              <button onClick={handleStartGame} disabled={players.length < 2} className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-4 rounded-xl font-semibold hover:shadow-lg transform hover:scale-105 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"><IconPlay/> Start Game (Min 2 Players)</button>
+            ) : (
+              <div className="text-center text-gray-600">Waiting for host to start the game...</div>
+            )}
+          </div>
+        </div>
+      );
+
+      if (screen === 'caption') return (
+        <div className="p-4 min-h-screen">
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white rounded-2xl p-4 mb-6 flex items-center justify-between">
+              <div className="text-xl font-bold text-purple-600">Round {currentRound}/5</div>
+              <div className="flex items-center gap-2 text-xl font-bold"><IconClock/> <span className={timeLeft <= 10 ? 'text-red-500' : 'text-purple-600'}>{timeLeft}s</span></div>
+              <div className="text-sm text-gray-600">{submittedPlayers.length}/{players.length} submitted</div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-6 mb-6">
+              <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">Caption This Meme!</h2>
+              <div className="flex justify-center mb-6">
+                <img src={currentMeme?.url} alt={currentMeme?.alt} className="w-full max-w-md rounded-xl shadow-lg object-cover" style={{ maxHeight: '400px' }} />
+              </div>
+
+              <div className="max-w-2xl mx-auto">
+                <textarea value={caption} onChange={(e)=>setCaption(e.target.value)} placeholder="Type your hilarious caption here..." className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 resize-none" rows="3" maxLength={150} />
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-sm text-gray-500">{caption.length}/150</span>
+                  <button onClick={handleSubmitCaption} className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-2 rounded-lg font-semibold hover:shadow-lg transition flex items-center gap-2"><IconSend/> Submit</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+
+      if (screen === 'waiting') return (
+        <div className="flex items-center justify-center p-4 min-h-screen">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full text-center">
+            <div className="text-6xl mb-4">⏳</div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Caption Submitted!</h2>
+            <p className="text-gray-600 mb-6">Waiting for other players...</p>
+            <div className="text-lg text-purple-600 font-semibold">{submittedPlayers.length}/{players.length} players submitted</div>
+          </div>
+        </div>
+      );
+
+      if (screen === 'voting') {
+        const captionEntries = Object.entries(submissions).filter(([name]) => name !== playerName);
+        return (
+          <div className="p-4 min-h-screen">
+            <div className="max-w-4xl mx-auto">
+              <div className="bg-white rounded-2xl p-6 mb-6">
+                <h2 className="text-2xl font-bold text-center text-gray-800 mb-2">Vote for the Funniest Caption!</h2>
+                <p className="text-center text-gray-600">You can't vote for your own caption</p>
+              </div>
+
+              <div className="bg-white rounded-2xl p-6 mb-6">
+                <img src={currentMeme?.url} alt={currentMeme?.alt} className="w-full max-w-md mx-auto rounded-xl shadow-lg object-cover" style={{ maxHeight: '300px' }} />
+              </div>
+
+              <div className="space-y-4 mb-6">
+                {captionEntries.map(([name, captionText]) => (
+                  <button key={name} onClick={()=>handleVote(name)} disabled={votedFor !== null} className={`w-full bg-white rounded-xl p-6 text-left hover:shadow-xl transition transform hover:scale-102 disabled:cursor-not-allowed ${votedFor === name ? 'ring-4' : ''}`}>
+                    <div className="flex items-start justify-between gap-4">
+                      <p className="text-lg text-gray-800 flex-1">{captionText}</p>
+                      {votedFor === name && (<IconStar/>) }
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {votedFor && isHost ? (
+                <button onClick={handleShowResults} className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4 rounded-xl font-semibold hover:shadow-lg transition">Show Results</button>
+              ) : votedFor && !isHost ? (
+                <div className="text-center text-white text-lg">Waiting for host to show results...</div>
+              ) : null}
+            </div>
+          </div>
+        );
+      }
+
+      if (screen === 'results') {
+        const sortedVotes = Object.entries(votes).sort((a,b)=>b[1]-a[1]);
+        return (
+          <div className="flex items-center justify-center p-4 min-h-screen">
+            <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-3xl w-full">
+              <h2 className="text-3xl font-bold text-center text-gray-800 mb-6">Round {currentRound} Results</h2>
+
+              <div className="mb-8">
+                <img src={currentMeme?.url} alt={currentMeme?.alt} className="w-full max-w-xs mx-auto rounded-xl shadow-lg object-cover mb-6" style={{ maxHeight: '250px' }} />
+
+                <div className="space-y-3">
+                  {sortedVotes.map(([name, voteCount], idx) => (
+                    <div key={name} className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">{idx === 0 && <IconTrophy/>}<span className="font-bold text-gray-800">{name}</span></div>
+                        <span className="text-purple-600 font-bold">{voteCount} votes (+{voteCount * 100} pts)</span>
+                      </div>
+                      <p className="text-gray-700 italic">"{submissions[name]}"</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-blue-50 rounded-xl p-4 mb-6">
+                <h3 className="font-bold text-gray-800 mb-2">Current Standings:</h3>
+                <div className="flex flex-wrap gap-2">
+                  {sortedScores.map(([name, score]) => (
+                    <div key={name} className="bg-white rounded-lg px-3 py-1 text-sm"><span className="font-semibold">{name}:</span> <span className="text-purple-600 font-bold">{score}</span></div>
+                  ))}
+                </div>
+              </div>
+
+              {isHost && (
+                <button onClick={handleNextRound} className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4 rounded-xl font-semibold hover:shadow-lg transform hover:scale-105 transition">{currentRound < 5 ? 'Next Round' : 'Show Final Winner'}</button>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      if (screen === 'final') {
+        const winner = sortedScores[0] || ['No one', 0];
+        return (
+          <div className="flex items-center justify-center p-4 min-h-screen">
+            <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-2xl w-full">
+              <div className="text-center mb-8">
+                <div className="inline-block bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-full p-6 mb-4"><IconTrophy/></div>
+                <h2 className="text-4xl font-bold text-gray-800 mb-2">Game Over!</h2>
+                <p className="text-3xl text-purple-600 font-bold mb-2">🎉 {winner[0]} Wins! 🎉</p>
+                <p className="text-xl text-gray-600">The Caption Champion!</p>
+                <p className="text-gray-500 mt-2">Final Score: {winner[1]} points</p>
+              </div>
+
+              <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl p-6 mb-8">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">Final Standings</h3>
+                <div className="space-y-2">
+                  {sortedScores.map(([name, score], idx) => (
+                    <div key={name} className="flex items-center justify-between bg-white rounded-lg p-3">
+                      <div className="flex items-center gap-3">
+                        <span className={`font-bold ${idx === 0 ? 'text-yellow-500' : idx === 1 ? 'text-gray-400' : idx === 2 ? 'text-orange-600' : 'text-purple-600'}`}>#{idx+1}</span>
+                        <span className="font-semibold text-gray-800">{name}</span>
+                      </div>
+                      <span className="font-bold text-purple-600">{score}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {isHost && (<button onClick={handlePlayAgain} className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4 rounded-xl font-semibold hover:shadow-lg transform hover:scale-105 transition">Play Again</button>)}
+            </div>
+          </div>
+        );
+      }
+
+      return null;
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<MemeCaptionGame />);
+    </script>
+  </body>
+</html>
